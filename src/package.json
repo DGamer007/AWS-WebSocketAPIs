@@ -1,0 +1,14 @@
+{
+  "name": "inovmac-backend",
+  "version": "1.0.0",
+  "description": "This Project contains all the Lambda Functions for Inovmac-Dashboard Backend.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "aws-sdk": "^2.1152.0"
+  }
+}

@@ -1,0 +1,257 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  WebsocketAPI for Inovmac Dashboard and Machines
+
+Resources:
+  # ---------------------------
+  # WebSocketAPI Configurations
+  # ---------------------------
+
+  WebSocketAPI:
+    Type: AWS::ApiGatewayV2::Api
+    Properties:
+      Name: WebsocketAPI
+      ProtocolType: WEBSOCKET
+      RouteSelectionExpression: "$request.body.action"
+
+  # ---------------------
+  # Routes Configurations
+  # ---------------------
+
+  ConnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref WebSocketAPI
+      RouteKey: $connect
+      AuthorizationType: NONE
+      OperationName: ConnectRoute
+      Target: !Sub "integrations/${ConnectRouteIntegration}"
+
+  DisconnectRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref WebSocketAPI
+      RouteKey: $disconnect
+      AuthorizationType: NONE
+      OperationName: DisconnectRoute
+      Target: !Sub "integrations/${DisconnectRouteIntegration}"
+
+  SendMessageRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref WebSocketAPI
+      RouteKey: message
+      AuthorizationType: NONE
+      OperationName: SendMessageRoute
+      Target: !Sub "integrations/${SendMessageRouteIntegration}"
+
+  CheckStatusRoute:
+    Type: AWS::ApiGatewayV2::Route
+    Properties:
+      ApiId: !Ref WebSocketAPI
+      RouteKey: status
+      AuthorizationType: NONE
+      OperationName: SendMessageRoute
+      Target: !Sub "integrations/${CheckStatusRouteIntegration}"
+
+  # ----------------------------------------------------------
+  # API Routes and Lambda Functions Integration Configurations
+  # ----------------------------------------------------------
+
+  ConnectRouteIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref WebSocketAPI
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${OnConnectFunction.Arn}/invocations"
+
+  DisconnectRouteIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref WebSocketAPI
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${OnDisconnectFunction.Arn}/invocations"
+
+  SendMessageRouteIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref WebSocketAPI
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${OnSendMessageFunction.Arn}/invocations"
+
+  CheckStatusRouteIntegration:
+    Type: AWS::ApiGatewayV2::Integration
+    Properties:
+      ApiId: !Ref WebSocketAPI
+      IntegrationType: AWS_PROXY
+      IntegrationUri: !Sub "arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${OnStatusFunction.Arn}/invocations"
+
+  # ----------------
+  # Lambda Functions
+  # ----------------
+
+  OnConnectFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: onConnect
+      CodeUri: src/
+      Handler: onConnect.handler
+      Runtime: nodejs16.x
+      Architectures:
+        - x86_64
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref Database
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - "execute-api:ManageConnections"
+              Resource:
+                - !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketAPI}/*"
+
+  OnDisconnectFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: onDisconnect
+      CodeUri: src/
+      Handler: onDisconnect.handler
+      Runtime: nodejs16.x
+      Architectures:
+        - x86_64
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref Database
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - "execute-api:ManageConnections"
+              Resource:
+                - !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketAPI}/*"
+
+  OnSendMessageFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: onSendMessage
+      CodeUri: src/
+      Handler: onMessage.handler
+      Runtime: nodejs16.x
+      Architectures:
+        - x86_64
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref Database
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - "execute-api:ManageConnections"
+              Resource:
+                - !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketAPI}/*"
+
+  OnStatusFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: onStatus
+      CodeUri: src/
+      Handler: onStatus.handler
+      Runtime: nodejs16.x
+      Architectures:
+        - x86_64
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref Database
+        - Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Action:
+                - "execute-api:ManageConnections"
+              Resource:
+                - !Sub "arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${WebSocketAPI}/*"
+
+  # ------------------------------------
+  # Permissions for Function Invocations
+  # ------------------------------------
+
+  OnConnectFunctionPermission:
+    Type: AWS::Lambda::Permission
+    DependsOn:
+      - WebSocketAPI
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref OnConnectFunction
+      Principal: apigateway.amazonaws.com
+
+  OnDisconnectFunctionPermission:
+    Type: AWS::Lambda::Permission
+    DependsOn:
+      - WebSocketAPI
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref OnDisconnectFunction
+      Principal: apigateway.amazonaws.com
+
+  OnSendMessageFunctionPermission:
+    Type: AWS::Lambda::Permission
+    DependsOn:
+      - WebSocketAPI
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref OnSendMessageFunction
+      Principal: apigateway.amazonaws.com
+
+  OnStatusFunctionPermission:
+    Type: AWS::Lambda::Permission
+    DependsOn:
+      - WebSocketAPI
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref OnStatusFunction
+      Principal: apigateway.amazonaws.com
+
+  # -----------------------
+  # Database Configurations
+  # -----------------------
+
+  Database:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: machine_data
+      AttributeDefinitions:
+        - AttributeName: "connectionId"
+          AttributeType: "S"
+      KeySchema:
+        - AttributeName: "connectionId"
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+
+  # -------------------------
+  # Deployment Configurations
+  # -------------------------
+
+  Deployment:
+    Type: AWS::ApiGatewayV2::Deployment
+    DependsOn:
+      - ConnectRoute
+      - SendMessageRoute
+      - DisconnectRoute
+      - CheckStatusRoute
+    Properties:
+      ApiId: !Ref WebSocketAPI
+
+  Stage:
+    Type: AWS::ApiGatewayV2::Stage
+    Properties:
+      StageName: machine_data
+      Description: Production Version of API
+      DeploymentId: !Ref Deployment
+      ApiId: !Ref WebSocketAPI
+
+Outputs:
+  WebSocketAPI:
+    Description: "WebSocket API URI to connect to..."
+    Value: !Sub "wss://${WebSocketAPI}.execute-api.${AWS::Region}.amazonaws.com/${Stage}"
